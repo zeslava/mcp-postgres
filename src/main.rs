@@ -6,8 +6,7 @@ use rmcp::{
     ErrorData as McpError, ServerHandler, ServiceExt,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::*,
-    schemars,
-    tool, tool_handler, tool_router,
+    schemars, tool, tool_handler, tool_router,
     transport::stdio,
 };
 use serde::Deserialize;
@@ -56,7 +55,9 @@ impl PgServer {
     }
 
     /// Execute a read-only SELECT query and return rows as JSON array
-    #[tool(description = "Execute a SELECT query against the PostgreSQL database and return rows as a JSON array")]
+    #[tool(
+        description = "Execute a SELECT query against the PostgreSQL database and return rows as a JSON array"
+    )]
     async fn query(
         &self,
         Parameters(p): Parameters<QueryParams>,
@@ -227,10 +228,9 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
 
-    let (client, connection) =
-        tokio_postgres::connect(&args.database_url, tokio_postgres::NoTls)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to connect to PostgreSQL: {e}"))?;
+    let (client, connection) = tokio_postgres::connect(&args.database_url, tokio_postgres::NoTls)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to connect to PostgreSQL: {e}"))?;
 
     tokio::spawn(async move {
         if let Err(e) = connection.await {
