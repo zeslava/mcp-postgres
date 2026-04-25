@@ -99,7 +99,7 @@ impl Database for SqliteBackend {
         .context("sqlite list_tables task panicked")?
     }
 
-    async fn describe_table(&self, _schema: &str, table: &str) -> Result<Vec<Column>> {
+    async fn describe_table(&self, _schema: Option<&str>, table: &str) -> Result<Vec<Column>> {
         let conn = self.conn.clone();
         let table = table.to_string();
         task::spawn_blocking(move || -> Result<Vec<Column>> {

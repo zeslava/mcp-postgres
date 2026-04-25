@@ -20,13 +20,9 @@ pub struct QueryParams {
 pub struct DescribeParams {
     /// Table name
     pub table: String,
-    /// Schema name (default: public)
-    #[serde(default = "default_schema")]
-    pub schema: String,
-}
-
-fn default_schema() -> String {
-    "public".to_string()
+    /// Schema name. Defaults: PostgreSQL=public, MySQL=current database, SQLite=ignored.
+    #[serde(default)]
+    pub schema: Option<String>,
 }
 
 #[derive(Clone)]
@@ -104,7 +100,7 @@ impl DbServer {
     ) -> Result<CallToolResult, McpError> {
         let cols = self
             .backend
-            .describe_table(&p.schema, &p.table)
+            .describe_table(p.schema.as_deref(), &p.table)
             .await
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
 

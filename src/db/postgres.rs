@@ -81,7 +81,8 @@ impl Database for PgBackend {
             .collect())
     }
 
-    async fn describe_table(&self, schema: &str, table: &str) -> Result<Vec<Column>> {
+    async fn describe_table(&self, schema: Option<&str>, table: &str) -> Result<Vec<Column>> {
+        let schema = schema.unwrap_or("public");
         let rows = self
             .client
             .query(

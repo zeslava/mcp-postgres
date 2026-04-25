@@ -1,15 +1,14 @@
 # db-mcp
 
-MCP-сервер для SQL-баз с read-only доступом через stdio. Один бинарник, движок выбирается по схеме URL.
+MCP-сервер для SQL-баз с read-only доступом через stdio. Один бинарник со всеми движками — выбор по схеме URL.
 
 Поддерживаемые движки:
 
-| Схема URL | Движок | Cargo feature |
-|-----------|--------|---------------|
-| `postgres://` / `postgresql://` | PostgreSQL (через `tokio-postgres`) | `postgres` |
-| `sqlite://` / `sqlite:` | SQLite (через `rusqlite`) | `sqlite` |
-
-По умолчанию собираются обе фичи. Чтобы получить минимальный бинарник под одну БД — `--no-default-features --features <engine>`.
+| Схема URL | Движок | Драйвер |
+|-----------|--------|---------|
+| `postgres://` / `postgresql://` | PostgreSQL | `tokio-postgres` |
+| `mysql://` | MySQL / MariaDB | `mysql_async` |
+| `sqlite://` / `sqlite:` | SQLite | `rusqlite` (bundled) |
 
 ## Установка
 
@@ -48,9 +47,7 @@ shasum -a 256 -c "db-mcp-${VERSION}-${TARGET}.tar.gz.sha256"
 ### Из исходников
 
 ```bash
-cargo build --release                                       # все движки (default)
-cargo build --release --no-default-features --features postgres
-cargo build --release --no-default-features --features sqlite
+cargo build --release
 # бинарник: ./target/release/db-mcp
 ```
 
@@ -60,6 +57,7 @@ URL передаётся флагом `--database-url` или переменно
 
 ```bash
 ./target/release/db-mcp --database-url postgres://user:pass@localhost:5432/mydb
+./target/release/db-mcp --database-url mysql://user:pass@localhost:3306/mydb
 ./target/release/db-mcp --database-url sqlite:///absolute/path/to/data.db
 DATABASE_URL=sqlite::memory: ./target/release/db-mcp
 ```
@@ -148,7 +146,7 @@ claude mcp add db \
 |------|-----------|----------|
 | `query` | `sql: string` | Выполняет SELECT, возвращает JSON-массив строк. Не-SELECT запросы отклоняются. |
 | `list_tables` | — | Список пользовательских таблиц. |
-| `describe_table` | `table: string`, `schema?: string` (default `public`) | Колонки, типы, nullability. |
+| `describe_table` | `table: string`, `schema?: string` | Колонки, типы, nullability. Дефолт `schema`: PG → `public`, MySQL → текущая БД, SQLite → не используется. |
 
 ### Преобразование типов
 
@@ -161,6 +159,19 @@ claude mcp add db \
 - `float4` / `float8` → JSON number
 - `json` / `jsonb` → распарсенный JSON
 - остальное (`uuid`, `numeric`, `date`, `time`, `timestamp[tz]`, `interval`, `inet`, `cidr`, `macaddr`, `bytea`, массивы, `range`, композитные типы, `enum`, геометрические, `tsvector`, `hstore`, …) — строка в каноническом представлении PostgreSQL.
+- `NULL` → JSON `null`.
+
+#### MySQL
+
+- `TINYINT`/`SMALLINT`/`MEDIUMINT`/`INT`/`BIGINT` → JSON number (signed/unsigned по типу)
+- `FLOAT`/`DOUBLE` → JSON number (NaN/Inf → `null`)
+- `DECIMAL`/`NUMERIC` → строка (точность сохраняется)
+- `JSON` → распарсенный JSON
+- `CHAR`/`VARCHAR`/`TEXT`/`ENUM`/`SET` → строка
+- `BINARY`/`VARBINARY`/`BLOB` → строка `\x<hex>` если не валидный UTF-8
+- `DATE` → `YYYY-MM-DD`
+- `DATETIME`/`TIMESTAMP` → `YYYY-MM-DD HH:MM:SS[.ffffff]`
+- `TIME` → `[-]HH:MM:SS[.ffffff]`
 - `NULL` → JSON `null`.
 
 #### SQLite
@@ -181,6 +192,9 @@ claude mcp add db \
 
 // describe_table (PG)
 { "table": "orders", "schema": "public" }
+
+// describe_table (MySQL — schema опционален, по умолчанию текущая БД)
+{ "table": "orders" }
 
 // describe_table (SQLite)
 { "table": "orders" }

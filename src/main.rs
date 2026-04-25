@@ -8,6 +8,9 @@ use clap::Parser;
 use rmcp::{ServiceExt, transport::stdio};
 
 use crate::db::Database;
+use crate::db::mysql::MysqlBackend;
+use crate::db::postgres::PgBackend;
+use crate::db::sqlite::SqliteBackend;
 use crate::server::DbServer;
 
 #[derive(Parser)]
@@ -38,12 +41,9 @@ async fn main() -> Result<()> {
         .unwrap_or("");
 
     let backend: Arc<dyn Database> = match scheme {
-        #[cfg(feature = "postgres")]
-        "postgres" | "postgresql" => {
-            Arc::new(crate::db::postgres::PgBackend::connect(&args.database_url).await?)
-        }
-        #[cfg(feature = "sqlite")]
-        "sqlite" => Arc::new(crate::db::sqlite::SqliteBackend::open(&args.database_url).await?),
+        "postgres" | "postgresql" => Arc::new(PgBackend::connect(&args.database_url).await?),
+        "mysql" => Arc::new(MysqlBackend::connect(&args.database_url).await?),
+        "sqlite" => Arc::new(SqliteBackend::open(&args.database_url).await?),
         other => bail!("unsupported database url scheme: {other:?}"),
     };
 

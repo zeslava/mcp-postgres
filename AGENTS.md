@@ -8,21 +8,21 @@ Single-binary stdio MCP server exposing read-only SQL tools across multiple data
 
 - Entry point: `src/main.rs` — CLI parsing, URL-scheme dispatch to a backend, server bootstrap.
 - Server layer: `src/server.rs` — `DbServer` holding `Arc<dyn Database>` and a `ToolRouter<DbServer>`. Tools are engine-agnostic.
-- Backends: `src/db/<engine>.rs` — each implements the `Database` trait from `src/db/mod.rs`. Engines are gated by Cargo features.
-- Stack: `rmcp` 1.5 (MCP SDK), `clap` for CLI/env config, `async-trait` for the dyn-compatible backend port.
+- Backends: `src/db/<engine>.rs` — each implements the `Database` trait from `src/db/mod.rs`. All engines are compiled into the single binary; no Cargo features.
+- Stack: `rmcp` 1.5 (MCP SDK), `clap` for CLI/env config, `async-trait` for the dyn-compatible backend port. Drivers: `tokio-postgres`, `mysql_async`, `rusqlite`.
 - Transport: stdio. Tracing writes to stderr — never log to stdout, it corrupts the JSON-RPC stream.
 
 ## Commands
 
 ```bash
-cargo build                    # default features
-cargo build --no-default-features --features postgres
+cargo build
 cargo run -- --database-url postgres://user:pass@host/db
+cargo run -- --database-url mysql://user:pass@host/db
 cargo run -- --database-url sqlite:///absolute/path/to.db
 DATABASE_URL=postgres://user:pass@host/db cargo run
 cargo fmt --all                # run before every commit
 cargo fmt --all -- --check     # CI gate
-cargo clippy --all-targets --all-features -- -D warnings
+cargo clippy --all-targets -- -D warnings
 ```
 
 CI runs `cargo fmt --all -- --check` — formatting failures break the build.
@@ -37,21 +37,23 @@ pub trait Database: Send + Sync {
     fn name(&self) -> &'static str;
     async fn query(&self, sql: &str) -> anyhow::Result<Vec<Row>>;
     async fn list_tables(&self) -> anyhow::Result<Vec<TableRef>>;
-    async fn describe_table(&self, schema: &str, table: &str) -> anyhow::Result<Vec<Column>>;
+    async fn describe_table(&self, schema: Option<&str>, table: &str)
+        -> anyhow::Result<Vec<Column>>;
 }
 ```
 
 `Row` is `serde_json::Map<String, Value>` — backends are responsible for converting their native types into JSON values.
 
+`schema = None` means "use the engine's natural default": PostgreSQL → `public`, MySQL → `DATABASE()` (current connection DB), SQLite → ignored (no schema concept).
+
 ### Adapters
 
-Each backend lives in its own file behind a Cargo feature:
-
-- `src/db/postgres.rs` (feature `postgres`) — `tokio-postgres`, text protocol via `simple_query`, post-processing in `text_to_json`.
-- `src/db/sqlite.rs` (feature `sqlite`) — `rusqlite` driven via `spawn_blocking`.
+- `src/db/postgres.rs` — `tokio-postgres`, text protocol via `simple_query`, post-processing in `text_to_json`.
+- `src/db/mysql.rs` — `mysql_async` pool, binary protocol via `Row`/`Value`, JSON columns parsed when `ColumnType::MYSQL_TYPE_JSON`.
+- `src/db/sqlite.rs` — `rusqlite` driven via `spawn_blocking`.
 
 Adding a new engine:
-1. Add the driver dep as `optional = true` in `Cargo.toml` and a feature that pulls it in.
+1. Add the driver dep to `Cargo.toml`.
 2. Create `src/db/<engine>.rs` with a `Backend` struct and `impl Database`.
 3. Wire the URL scheme in `main::main`.
 4. Document the type-mapping in README.
