@@ -15,10 +15,17 @@ use crate::db::sqlite::SqliteBackend;
 use crate::server::DbServer;
 
 #[derive(Parser)]
-#[command(about = "MCP server for SQL databases")]
+#[command(
+    about = "MCP server for SQL databases",
+    version,
+    disable_version_flag = true
+)]
 struct Args {
     #[arg(long, env = "DATABASE_URL")]
     database_url: String,
+
+    #[arg(short = 'v', long = "version", action = clap::ArgAction::Version)]
+    version: Option<bool>,
 }
 
 #[tokio::main]
